@@ -1,0 +1,5 @@
+*.bak*
+.DS_Store
+skills/gptpro/bundles.conf
+/gptpro-bundles/
+/gptpro/
