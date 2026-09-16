@@ -57,7 +57,8 @@ Canonical grunt jobs:
 
 **Do NOT route here:** anything contract-sensitive, security-relevant,
 architecture-shaped, ambiguous, or where a subtly-wrong answer would be
-expensive to catch. That's Codex `sol` at `high` or the main loop. Flash's failure mode is
+expensive to catch. That's Codex `sol` at `high` (security work: Codex
+`gpt-daybreak-blue-latest`) or the main loop. Flash's failure mode is
 confident plausible-looking wrongness on work that needed judgment — which is
 exactly why it must only get work where wrongness is obvious and cheap.
 

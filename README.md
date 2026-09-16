@@ -27,6 +27,10 @@ What that means in practice:
   reasoning effort (`medium` → `high` → one `xhigh` lane). `gpt-6-astra` is
   powerful but drains a Plus plan fast, so it's **never auto-routed**. It only
   runs when you ask for it.
+- **Defensive security goes to Daybreak Blue** (`gpt-daybreak-blue-latest`),
+  Codex's defensive-cybersecurity model: audits, vulnerability triage, threat
+  models, secret and CVE sweeps. Read-only lanes, and every finding is verified
+  in the main loop before a fix.
 - **Gemini Flash is the bulk pool.** "Check these 50 files", "label these 200
   lines", "same mechanical edit everywhere" go here, with structured output so
   the results can be counted and spot-checked.
@@ -94,7 +98,9 @@ için yazıldı. Tek bir pahalı plan yerine üç ucuz plan (Claude, ChatGPT Plu
 Google hesabı) birlikte kullanılıyor ve her planın kotası ayrı bir bütçe olarak
 yönetiliyor. Karar, spec ve son kontrol Claude ana oturumunda kalıyor.
 Spec'i yazılmış işler Codex `sol` ile yapılıyor, zorluğa göre effort artıyor.
-`astra` yalnızca açıkça istenirse kullanılıyor. Toplu ve tekdüze işler Gemini
+`astra` yalnızca açıkça istenirse kullanılıyor. Savunma amaçlı güvenlik işleri
+(denetim, zafiyet triyajı, tehdit modeli, secret/CVE taraması) Codex'in
+Daybreak Blue modeline gidiyor; bulgular ana oturumda doğrulanıyor. Toplu ve tekdüze işler Gemini
 Flash'a cömertçe veriliyor. Amaç fiyat/performans: her iş, onu doğru yapabilen
 en ucuz kotaya gidiyor.
 
