@@ -276,10 +276,11 @@ grants exactly the write a lane needs instead of the nuclear flag.
 `--dangerously-skip-permissions` auto-approves *every* tool — `run_command`
 included — and still needs explicit user OK once per session before first use.
 
-> **`trustedWorkspaces` is a live exposure.** That same settings file currently
-> lists the personal Obsidian vault. With the no-personal-data rule in force,
-> never point a lane at the vault: workspace trust is already granted, so
-> nothing downstream will stop it reading notes.
+> **Audit `trustedWorkspaces` in that same settings file.** Any directory
+> listed there is pre-trusted, so a lane pointed at it reads freely with
+> nothing downstream to stop it. A personal notes vault landing in that list
+> silently defeats the no-personal-data rule — keep private trees out of it and
+> re-check after any interactive session that may have added one.
 
 ### Exit codes
 
@@ -501,5 +502,6 @@ touch clearly disjoint files):
   middle path between `--sandbox` and `--dangerously-skip-permissions`.
   **Still open:** exact allow-rule grammar and whether globs are supported —
   `write_file(<target>)` is the CLI's own suggested form, not yet exercised.
-- **`trustedWorkspaces` currently includes the personal vault.** Noted as an
-  exposure, not changed.
+- **`trustedWorkspaces` is a standing exposure to audit.** Found a personal
+  notes vault pre-trusted there and cleared it; re-check the list periodically,
+  since an interactive session can add an entry silently.
