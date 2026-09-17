@@ -54,6 +54,12 @@ Canonical grunt jobs:
 - Bulk shallow scan and extract ("list every TODO with its file:line and the
   surrounding function name").
 - First-pass triage that a better tier will then review.
+- **Bulk web lookup** — the lane has `search_web` and `read_url_content`:
+  "check which of these 60 URLs still resolve", "pull the current default port
+  from each of these 20 doc pages". One row per input, same contract as a file
+  scan.
+- **Throwaway image volume** — `generate_image` is built in. Cheap placeholder
+  or draft assets belong here; Codex `gpt-image-2` stays for images that matter.
 
 **Do NOT route here:** anything contract-sensitive, security-relevant,
 architecture-shaped, ambiguous, or where a subtly-wrong answer would be
@@ -140,6 +146,55 @@ id — it's not a fallback, it's a guaranteed error.**
 | `gemini-3.1-pro-high` / `-low` | **Out of scope — do not route here.** See quota rules. |
 | `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium` | Visible in the list; **not this skill's business.** |
 
+## What a lane actually has: the verified tool inventory
+
+**Probed live 2026-09-17** (`flash-low`, `--sandbox`, one call). A lane is a
+full agent, not a bare model call — it arrives holding 17 tools:
+
+| Group | Tools |
+|---|---|
+| Files | `view_file`, `write_to_file`, `replace_file_content`, `list_dir`, `find_by_name`, `grep_search` |
+| Shell | `run_command` |
+| Web | `search_web`, `read_url_content` |
+| Media | `generate_image` |
+| Delegation | `define_subagent`, `invoke_subagent`, `manage_subagents` |
+| Scheduling | `manage_task`, `schedule` |
+| Interaction | `ask_question`, `send_message` |
+
+Consequences that change how you brief a lane:
+
+- **Don't paste file contents into a brief.** The lane reads the disk itself.
+  Give it paths or a precise glob plus `--add-dir`.
+- **`run_command` means any CLI is already reachable** — `git`, `gh`, `curl`,
+  `python3`. This is why MCP servers are rarely worth adding here (below).
+- **`search_web` / `read_url_content` are unused capacity.** Bulk link checking
+  and "extract one field from each of these 40 doc pages" are grunt jobs this
+  tier can already do.
+- **`generate_image` exists**, so throwaway images need not go to Codex's
+  `gpt-image-2`. Use Codex when quality matters; use this for cheap volume.
+- **A lane can spawn its own subagents.** `define_subagent` / `invoke_subagent`
+  mean an under-specified brief can silently fan out into work you never
+  budgeted. For a deterministic grunt lane, close it off in the brief:
+  *"Do not define or invoke subagents; do this work yourself."*
+- **`ask_question` is a trap in headless mode.** Nobody can answer it. An
+  ambiguous brief burns the whole call. Enumerate; never leave a lane a
+  question to ask.
+
+### Why not MCP servers or plugins on this tier
+
+`agy mcp add` and `agy plugin install` both exist. Resist them here:
+
+1. **`run_command` already covers anything with a CLI.** MCP only earns its
+   place for a capability with no command-line path.
+2. **Every added tool schema is billed on every lane, forever.** The measured
+   floor is already ~14K input tokens before your prompt — that *is* the 17
+   tools. Tools are a permanent tax on the one tier whose entire value is being
+   cheap per item.
+3. **Plugins are dead on the fleet path anyway.** Every lane runs
+   `--disable-slash-commands`, and that flag disables *slash command and skill*
+   expansion. A plugin shipping skills contributes nothing to a `-p` lane.
+4. **Never a vault or personal-data MCP.** Same rule as lane prompt content.
+
 ## Base command
 
 ```bash
@@ -158,7 +213,7 @@ session with **no API key set**. Headless print mode on account auth works.
 |---|---|---|
 | `-p` / `--print` / `--prompt` | run one prompt non-interactively and exit | the `codex exec` equivalent; **always use this in a fleet** |
 | `--model <id>` | model for this session | always pass explicitly; never rely on the account default |
-| `--output-format text\|json\|stream-json` | print-mode output shape | `text` and `json` both verified live 2026-09-16. **Prefer `json` for fleet lanes** — gives structured fields instead of scraping stdout. Envelope: `{conversation_id, status, response, error?, duration_seconds, num_turns, structured_output?, json_schema?, usage:{input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens}}`. |
+| `--output-format text\|json\|stream-json` | print-mode output shape | `text` and `json` both verified live 2026-09-16. **Prefer `json` for fleet lanes** — gives structured fields instead of scraping stdout. Envelope: `{conversation_id, status, response, error?, duration_seconds, num_turns, structured_output?, json_schema?, usage:{input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens}, denied_actions?}`. `denied_actions` appears when a tool call was auto-denied — see Lane permissions below; check it on every lane. |
 | `--json-schema <str\|file>` | enforce structured output | Verified live 2026-09-16 — works, populates `structured_output` in the JSON envelope. **Gotcha found live:** a transient `status:"ERROR"` (e.g. `UNAVAILABLE (503): No capacity`) can still carry a valid, schema-conforming `structured_output` in the same response — don't gate lane success purely on `status=="SUCCESS"`; check for `structured_output` presence first, fall back to a retry only if it's absent. Ideal for classification/grunt lanes — forces a parseable verdict. |
 | `--add-dir <dir>` | add a directory to the workspace (repeatable) | how a lane sees files outside CWD |
 | `--dangerously-skip-permissions` | auto-approve ALL tool calls incl. file writes and shell | the `--full-auto` / `danger-full-access` analogue — **write lanes only, after explicit user OK once per session** |
@@ -177,15 +232,54 @@ then *stays in an interactive session*. Passing `-i` in a background fleet lane
 gives you a hung process holding a TTY, not an error. **Never use `-i` in this
 skill. Always `-p`.**
 
-### Read lane vs write lane
+### Lane permissions: what actually blocks a write
 
-| Lane type | Flags |
-|---|---|
-| Read / scan / classify (default) | `--sandbox --disable-slash-commands` |
-| Apply mechanical edits | `--dangerously-skip-permissions --disable-slash-commands` (confirm with user once per session before first use) |
+**Verified live 2026-09-17.** The mechanism is not the one the flag names imply.
 
-Give a lane only what it needs. A classification lane must never get
-`--dangerously-skip-permissions`.
+`--sandbox` does **not** remove the write tools. A sandboxed lane still holds
+`write_to_file`, `replace_file_content` and `run_command`. What stops a write is
+**headless mode itself**: a permission-gated tool call under `-p` has nobody to
+prompt, so it is **auto-denied**. Observed on a sandboxed lane told to write
+`/tmp/gem-sandbox-write-test.txt`:
+
+```
+jetski: no output produced — a tool required the "write_file" permission that
+headless mode cannot prompt for, so it was auto-denied.
+```
+
+The file was never created. Read lanes are therefore safe by default — but know
+*why*, because three things follow:
+
+- **A denied lane still reports `status:"SUCCESS"`** with an empty `response`,
+  while the process exits **1**. This is the second case (after the
+  `status:"ERROR"`-with-valid-`structured_output` gotcha) where `status` is
+  worthless. **Gate on payload and exit code, never on `status`.**
+- **The envelope carries `denied_actions`** —
+  `[{"action":"write_file","display_name":"WriteToFile"}]`. That is the
+  machine-readable tell that a lane tried to exceed its brief. **Check it on
+  every lane.** A read lane with a non-empty `denied_actions` is a brief bug:
+  the lane believed it was supposed to write.
+- **An auto-denied lane still burns the full ~14K overhead** and returns
+  nothing. A write lane run without write permission is a silent no-op, not an
+  error you will notice in the response text.
+
+| Lane type | Flags | Write reaches disk? |
+|---|---|---|
+| Read / scan / classify (default) | `--sandbox --disable-slash-commands` | No — auto-denied |
+| Scoped write | `--disable-slash-commands` + a `permissions.allow` rule | Only the allowed targets |
+| Full write | `--dangerously-skip-permissions --disable-slash-commands` | Yes — everything |
+
+**Prefer the scoped middle path.** `agy`'s own denial message names it: add an
+allow-rule under `permissions.allow` in
+`~/.gemini/antigravity-cli/settings.json`, e.g. `write_file(<target>)`. That
+grants exactly the write a lane needs instead of the nuclear flag.
+`--dangerously-skip-permissions` auto-approves *every* tool — `run_command`
+included — and still needs explicit user OK once per session before first use.
+
+> **`trustedWorkspaces` is a live exposure.** That same settings file currently
+> lists the personal Obsidian vault. With the no-personal-data rule in force,
+> never point a lane at the vault: workspace trust is already granted, so
+> nothing downstream will stop it reading notes.
 
 ### Exit codes
 
@@ -241,7 +335,7 @@ Either way: **structured output** so rows can be counted.
 | Setting | Default | Why |
 |---|---|---|
 | Model | `gemini-3.8-flash-low`, or whatever the caller stamped | Routing is the calling agent's decision (see `fleet-orchestration`); stepping up to `flash-medium` is cheap and fine. |
-| Sandbox | `--sandbox` for read lanes, `--dangerously-skip-permissions` for write lanes | Only grant what the lane needs. |
+| Permissions | `--sandbox` for read lanes; try a scoped `permissions.allow` rule before reaching for `--dangerously-skip-permissions` | Headless auto-denies permission-gated tools, so a read lane is safe by default. Check `denied_actions` to confirm. |
 | Slash commands | `--disable-slash-commands` always | Lane briefs contain user data; don't let it expand. |
 | Timeout | `--print-timeout 20m` for bulk lanes | The 5m default silently truncates long scans. |
 | Working dir | `-C` does not exist in `agy` — use a `cd` in the spawned shell plus `--add-dir <dir>` | This is the notable divergence from `codex-fleet`. |
@@ -393,3 +487,19 @@ touch clearly disjoint files):
   for `UNAVAILABLE`/`503`/rate-limit errors.
 - **Sample real lane (2026-09-16):** 1 lane, `flash-low`, `--sandbox`,
   6-file frontmatter extraction → 6/6 correct, 104 s, ~86K tokens (~40K cached).
+
+## Verified 2026-09-17
+
+- **Tool inventory probed:** 17 tools, listed above. The ~14K floor is these
+  schemas. A lane is a full agent with file, shell, web, image, subagent and
+  scheduling tools — brief it accordingly.
+- **`--sandbox` does not disarm the write tools; headless auto-denial does.**
+  Full mechanism and the `denied_actions` signal under Lane permissions above.
+- **Second `status` betrayal confirmed:** an auto-denied lane returns
+  `status:"SUCCESS"`, empty `response`, exit code 1. Never gate on `status`.
+- **`permissions.allow` in `~/.gemini/antigravity-cli/settings.json`** is a real
+  middle path between `--sandbox` and `--dangerously-skip-permissions`.
+  **Still open:** exact allow-rule grammar and whether globs are supported —
+  `write_file(<target>)` is the CLI's own suggested form, not yet exercised.
+- **`trustedWorkspaces` currently includes the personal vault.** Noted as an
+  exposure, not changed.
