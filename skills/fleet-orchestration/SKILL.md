@@ -1,6 +1,6 @@
 ---
 name: fleet-orchestration
-description: "Delegation policy for a price/performance agent stack built on three separate ~$20/month plans — Claude (main loop + sub-agents), ChatGPT Plus (Codex lanes), and a Google account (Gemini Flash via Antigravity `agy`). The main loop owns architecture, judgment, AND per-lane routing (model + effort); delegates execute exactly what it stamps. Codex: gpt-5.6-sol for every routed lane with effort scaled by difficulty, gpt-6-astra only on explicit user request, gpt-daybreak-blue-latest for defensive security lanes. Gemini Flash: generous, high-volume grunt tier. Claude sub-agents share the main loop's quota, so they get an explicit, cheapest-capable model. Load whenever spawning sub-agents, Codex or Gemini lanes, or planning any delegation."
+description: "Delegation policy for a price/performance agent stack built on three separate ~$20/month plans — Claude (main loop + sub-agents), ChatGPT Plus (Codex lanes), and a Google account (Gemini Flash via Antigravity `agy`). The main loop owns architecture, judgment, AND per-lane routing (model + effort); delegates execute exactly what it stamps. Codex: gpt-5.6-sol for every routed lane with effort scaled by difficulty, gpt-6-astra only on explicit user request, defensive security lanes on sol `high` read-only, upgraded to gpt-daybreak-blue-latest only when the account has Daybreak access. Gemini Flash: generous, high-volume grunt tier. Claude sub-agents share the main loop's quota, so they get an explicit, cheapest-capable model. Load whenever spawning sub-agents, Codex or Gemini lanes, or planning any delegation."
 ---
 
 # Orchestration & delegation policy ($20-plan stack)
@@ -60,14 +60,24 @@ right.** The main loop's tokens buy judgment, not throughput.
     astra.)
   - **`gpt-6-astra` is never auto-routed.** It is frontier-tier but drains a
     Plus plan fast. Use it only when the user explicitly asks.
-  - **`gpt-daybreak-blue-latest` (Daybreak Blue) — the defensive security
-    lane.** A frontier agentic coding model specialised for defensive
-    cybersecurity. Route here, instead of `sol`, any lane whose deliverable is
-    a security judgment on systems the operator owns or is authorised to test:
+  - **Defensive security lane — `sol` by default, Daybreak Blue when
+    available.** Any lane whose deliverable is a security judgment on systems
+    the operator owns or is authorised to test:
     security review / audit of a diff or module, vulnerability triage,
     threat modelling, secret and credential-leak sweeps, dependency/CVE impact
     analysis, auth / sandbox / permission boundary review, hardening plans,
     security-focused incident or log analysis, authorised CTF work.
+    - Model: `gpt-5.6-sol`. Upgrade to `gpt-daybreak-blue-latest` (Daybreak
+      Blue, OpenAI's approval-gated Trusted Access for Cyber tier: same
+      frontier model with cyber safeguards relaxed) only when the account is
+      known to have Daybreak access. Access requires approval, an eligible
+      plan, Advanced Account Security and two FIDO2 hardware keys, and can be
+      revoked; don't assume it. If a Daybreak lane fails with a
+      model-unavailable / access error, re-fire the same brief on `sol` at the
+      same effort instead of dropping the lane.
+    - Daybreak is an upgrade, not a requirement: it mainly cuts refusals on
+      legitimate defensive work. Plain `sol` handles code review, triage and
+      threat modelling of your own code fine.
     - Effort: `medium` for triage and single-file checks, `high` default for
       audits, `xhigh` for one explicitly deep audit. `max`/`ultra` only on
       explicit request.
@@ -78,11 +88,12 @@ right.** The main loop's tokens buy judgment, not throughput.
       security-critical seam still stays in the main loop.
     - Offensive work (exploitation of third-party systems, evasion, malware)
       is not a routing case for any lane.
-    - Quota burn relative to `sol` is not yet measured; disclose the lane count
-      as usual and don't fan out more than a few Daybreak lanes at once.
+    - Daybreak quota burn relative to `sol` is not yet measured; disclose the
+      lane count as usual and don't fan out more than a few Daybreak lanes at
+      once.
   - Effort buys more thinking, not a higher ceiling. The single most
     contract-sensitive or security-critical seam stays in the main loop
-    (Daybreak lanes feed it evidence; they don't replace its gate review).
+    (security lanes feed it evidence; they don't replace its gate review).
   - Codex models are obsessive instruction followers: capable, but they
     *execute* rather than improvise. Lane quality is bounded by spec quality —
     invest main-loop tokens in the brief, not in doing the lane yourself.
@@ -97,7 +108,7 @@ right.** The main loop's tokens buy judgment, not throughput.
   works with the strongest thinking model your plan offers.
 
 Rule of thumb: **bulk mechanical → Gemini; spec'd execution → Codex sol
-(effort by difficulty); defensive security analysis → Codex Daybreak Blue; loose exploration → cheapest capable Claude
+(effort by difficulty); defensive security analysis → Codex sol `high` read-only (Daybreak Blue if the account has it); loose exploration → cheapest capable Claude
 sub-agent; judgment / specs / synthesis / gate review → the main loop.**
 
 ## The difficulty axis
@@ -108,7 +119,7 @@ sub-agent; judgment / specs / synthesis / gate review → the main loop.**
 | Routine, spec'd, parallel | Codex `sol` `medium` | ChatGPT |
 | Hard / precision, spec'd | Codex `sol` `high` | ChatGPT |
 | One explicitly heavy lane | Codex `sol` `xhigh` | ChatGPT |
-| Defensive security: audit, vuln triage, threat model, secret/CVE sweep | Codex `gpt-daybreak-blue-latest` `high` (`medium` triage), read-only | ChatGPT |
+| Defensive security: audit, vuln triage, threat model, secret/CVE sweep | Codex `sol` `high` (`medium` triage), read-only; `gpt-daybreak-blue-latest` if available | ChatGPT |
 | Loose exploration needing judgment | Claude sub-agent, explicit cheap model | Claude |
 | Most critical seam, gate review, synthesis | main loop | Claude |
 | Anything on astra | only on explicit user request | ChatGPT |

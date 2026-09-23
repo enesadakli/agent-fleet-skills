@@ -1,6 +1,6 @@
 ---
 name: codex-fleet
-description: Standalone Codex CLI runner + fleet orchestrator. Does THREE things and always EXECUTES them (never just describes): (1) general code tasks via `codex exec`, (2) high-quality image generation via Codex's built-in `gpt-image-2` tool, and (3) parallel multi-lane fleets — spawning many `codex exec` delegates at once with worktree isolation. Model/effort per lane are NOT this skill's call — the calling agent (see `fleet-orchestration`) stamps `{model, effort}` on each lane before dispatch; this skill just executes it. Default model: `gpt-5.6-sol` for ALL lanes, including hard/precision ones (`high`, `xhigh` when explicitly heavy) — `gpt-6-astra` ONLY when the user explicitly asks for it (ChatGPT Plus quota). `gpt-daybreak-blue-latest` (Daybreak Blue) for defensive security lanes (audit, vuln triage, threat model, secret/CVE sweeps) when the caller stamps it. `gpt-6-terra` does not exist under ChatGPT-account auth, do not use it. `--skip-git-repo-check` always. For multiple independent jobs, fire them ALL in parallel — compute is not the constraint, throughput is — but state lane count and each lane's model/effort in one sentence before firing more than one. Triggers on: "use codex", "run codex", "codex exec", "imagegen", "generate image", "make image", "render this", "ask codex to ...", "have codex ...", "spawn a fleet", "parallel codex", any image-asset request (icons/sigils/banners/portraits/backgrounds/sprites/UI assets/mockups/photoreal/etc.), and any request to delegate code-level work to Codex.
+description: Standalone Codex CLI runner + fleet orchestrator. Does THREE things and always EXECUTES them (never just describes): (1) general code tasks via `codex exec`, (2) high-quality image generation via Codex's built-in `gpt-image-2` tool, and (3) parallel multi-lane fleets — spawning many `codex exec` delegates at once with worktree isolation. Model/effort per lane are NOT this skill's call — the calling agent (see `fleet-orchestration`) stamps `{model, effort}` on each lane before dispatch; this skill just executes it. Default model: `gpt-5.6-sol` for ALL lanes, including hard/precision ones (`high`, `xhigh` when explicitly heavy) — `gpt-6-astra` ONLY when the user explicitly asks for it (ChatGPT Plus quota). `gpt-daybreak-blue-latest` (Daybreak Blue) for defensive security lanes only when the caller stamps it (account must have Daybreak access); on a model-unavailable error re-fire on `gpt-5.6-sol`. `gpt-6-terra` does not exist under ChatGPT-account auth, do not use it. `--skip-git-repo-check` always. For multiple independent jobs, fire them ALL in parallel — compute is not the constraint, throughput is — but state lane count and each lane's model/effort in one sentence before firing more than one. Triggers on: "use codex", "run codex", "codex exec", "imagegen", "generate image", "make image", "render this", "ask codex to ...", "have codex ...", "spawn a fleet", "parallel codex", any image-asset request (icons/sigils/banners/portraits/backgrounds/sprites/UI assets/mockups/photoreal/etc.), and any request to delegate code-level work to Codex.
 ---
 
 # Codex Fleet — Standalone Action Runner
@@ -36,7 +36,7 @@ fixed default of this skill. When the caller hasn't stamped a lane spec:
 
 | Setting | Value | When to override |
 |---|---|---|
-| Model | `gpt-5.6-sol` for every lane | `gpt-6-astra` ONLY when the user explicitly asks for it (on a $20 ChatGPT Plus plan astra drains the quota fast). Hard/precision lanes stay on sol with higher effort, or stay in the main loop. `-m <model>` if the user specifies something else directly. History: gpt-5.5 → gpt-5.6-sol → gpt-6-astra (2026-09-05) added as the precision tier, not a replacement for sol. `gpt-daybreak-blue-latest` (Daybreak Blue, defensive-cybersecurity specialist) for security lanes the caller stamps — see below. `gpt-6-terra` does **not** exist under ChatGPT-account auth (confirmed 2026-09-16, `invalid_request_error`) — never route here. |
+| Model | `gpt-5.6-sol` for every lane | `gpt-6-astra` ONLY when the user explicitly asks for it (on a $20 ChatGPT Plus plan astra drains the quota fast). Hard/precision lanes stay on sol with higher effort, or stay in the main loop. `-m <model>` if the user specifies something else directly. History: gpt-5.5 → gpt-5.6-sol → gpt-6-astra (2026-09-05) added as the precision tier, not a replacement for sol. `gpt-daybreak-blue-latest` (Daybreak Blue, approval-gated defensive-cybersecurity access) for security lanes the caller stamps, only if the account has access — see below. `gpt-6-terra` does **not** exist under ChatGPT-account auth (confirmed 2026-09-16, `invalid_request_error`) — never route here. |
 | Reasoning effort | `medium` for routine lanes, `high` for hard/precision lanes | `xhigh` ONLY for a single explicitly heavy lane ("use xhigh", "deep") — never as a fleet-wide reflex, it burns quota too; `low` for cheap read lanes; `ultra` is opt-in because it enables OpenAI's automatic task delegation |
 | Service tier | **standard — fast is OFF** | see the note below; opt in per-call only |
 | Sandbox | `read-only` | `workspace-write` for edits; `danger-full-access` for image gen or network (ask first) |
@@ -70,11 +70,14 @@ codex exec --skip-git-repo-check \
 
 Swap `-c model_reasoning_effort=medium` for `=high` when the caller has stamped this lane as hard/precision (see `fleet-orchestration`). Model stays `gpt-5.6-sol`; `-m gpt-6-astra` only on explicit user request.
 
-### Defensive security lane (Daybreak Blue)
+### Defensive security lane (sol, or Daybreak Blue when available)
 
 When the caller stamps a lane as defensive security (security review, vuln
 triage, threat model, secret/credential sweep, dependency CVE impact, hardening
-plan, authorised CTF), swap the model and keep the sandbox read-only:
+plan, authorised CTF), keep the sandbox read-only. The default model is
+`gpt-5.6-sol`; the caller swaps in `gpt-daybreak-blue-latest` only when the
+account has Daybreak access (approval-gated, needs two FIDO2 hardware keys,
+can be revoked):
 
 ```bash
 codex exec --skip-git-repo-check \
@@ -85,7 +88,10 @@ codex exec --skip-git-repo-check \
    required output: severity, file:line, exploit precondition, evidence, fix>" 2>/dev/null
 ```
 
-- The model's cached default effort is `low` — always pass effort explicitly
+- If the Daybreak call fails with a model-unavailable / access error, re-fire
+  the identical brief with `-m gpt-5.6-sol` at the same effort. Don't drop the
+  lane and don't retry Daybreak in a loop.
+- Daybreak's cached default effort is `low` — always pass effort explicitly
   (`medium` triage, `high` audit, `xhigh` one deep audit; `max`/`ultra` only on
   explicit request). Smoke-tested on CLI 0.154 (2026-09-16).
 - Findings come back as claims; the orchestrator verifies them before any fix.
