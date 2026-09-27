@@ -606,11 +606,15 @@ when it is on PATH. This exact shape ran a real write lane on CLI 0.158
 (2026-09-27): approval `on-request`, sandbox `workspace-write`, files edited.
 Drop the `< /dev/null` and the lane hangs on stdin (see the note in Part 1).
 
-**Lane cost.** Budget a medium write lane at ~150K tokens, not the older
-50–80K estimate: a real `sol` `medium` write lane (one-repo deck fix,
-2026-09-27) used ~142K. Read lanes and tiny edits are cheaper; long briefs,
-big files and repeated test runs push it up. Use this figure in the one-line
-fleet disclosure (lanes × ~150K) and keep minute-sized jobs in the main loop.
+**Lane cost scales with how much repo the lane reads, not with how hard the
+change is.** Three `sol` write lanes on CLI 0.158 (2026-09-27): a trivial
+2-file fix at `low` used ~30K; a ~200-line, 5-file feature with tests in a
+small scratch repo at `medium` used ~37K; a `medium` fix in a real project
+repo used ~142K. So budget ~30–50K per lane for a small, self-contained repo
+and ~100–150K for a medium lane in a real project. A write lane doesn't go
+much below ~30K however small the job. Put lanes × the upper end of the
+matching range in the one-line fleet disclosure, and keep minute-sized jobs
+in the main loop. Three data points, not a benchmark — refine as more land.
 
 Fire it with `run_in_background: true`. The brief is the lane's **entire contract** — it must state the goal, the exact files the lane OWNS, the files it must NOT touch (and which sibling owns them), the acceptance check, and how to report done/failed. A delegate can't see your conversation; everything it needs goes in the brief.
 
