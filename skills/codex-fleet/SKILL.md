@@ -71,7 +71,7 @@ codex exec --skip-git-repo-check \
   -m gpt-5.6-sol \
   -c model_reasoning_effort=medium \
   --sandbox read-only \
-  "<PROMPT>" 2>/dev/null
+  "<PROMPT>" < /dev/null 2>/dev/null
 ```
 
 Swap `-c model_reasoning_effort=medium` for `=high` when the caller has stamped this lane as hard/precision (see `fleet-orchestration`). Model stays `gpt-5.6-sol`; `-m gpt-6-astra` only on explicit user request.
@@ -91,7 +91,7 @@ codex exec --skip-git-repo-check \
   -c model_reasoning_effort=high \
   --sandbox read-only \
   "<SECURITY BRIEF: scope, threat model / assets, what counts as a finding,
-   required output: severity, file:line, exploit precondition, evidence, fix>" 2>/dev/null
+   required output: severity, file:line, exploit precondition, evidence, fix>" < /dev/null 2>/dev/null
 ```
 
 - If the Daybreak call fails with a model-unavailable / access error, re-fire
@@ -117,6 +117,8 @@ For a working dir other than CWD: add `-C <DIR>`.
 
 > **`--full-auto` is gone.** On current CLIs (0.158 confirmed, 2026-09-27) `codex exec --full-auto` fails with `unexpected argument '--full-auto' found`. `-s workspace-write` alone is enough for an edit lane: a real lane ran with approval `on-request` and sandbox `workspace-write` and edited its files. `--approve-for-me` (route approval requests through automatic review in workspace-write) is **mutually exclusive with `-s`/`--sandbox`** — the CLI rejects the combination — so pick one; this skill uses `-s`.
 
+> **Close stdin: `< /dev/null` on every prompt-as-argument call.** When stdin is left open, `codex exec` (0.158) prints `Reading additional input from stdin...` and waits for EOF before calling the model. An agent's Bash tool leaves stdin open, so the lane hangs forever: a test lane sat for 400+ s with a 39-byte log, and the same command with `< /dev/null` finished in 33 s (2026-09-27). Every runnable example in this file carries it. Exceptions: `resume` calls whose prompt is piped in on stdin (the pipe closes it) and the deliberately broken greedy `-i` example in Part 1.5.
+
 For escalated reasoning: replace `model_reasoning_effort=high` with `=xhigh` (a single explicitly heavy lane only).
 
 ### Background-first invocation pattern
@@ -128,7 +130,7 @@ Bash tool call:
   command: codex exec --skip-git-repo-check -m gpt-5.6-sol \
            -c model_reasoning_effort=medium \
            --sandbox read-only \
-           "Review src/foo.ts for race conditions and report findings." 2>/dev/null
+           "Review src/foo.ts for race conditions and report findings." < /dev/null 2>/dev/null
   run_in_background: true
 ```
 
@@ -192,7 +194,7 @@ codex exec [opts] -i ref1.png -i ref2.png "prompt text" > log 2>&1
 
 **RIGHT (use `--` separator):**
 ```bash
-codex exec [opts] -i ref1.png -i ref2.png -- "prompt text" > log 2>&1
+codex exec [opts] -i ref1.png -i ref2.png -- "prompt text" < /dev/null > log 2>&1
 ```
 
 The `--` terminates the `-i` flag's greedy parse and the prompt is correctly passed as a positional argument. This is the single most important pattern for any multi-reference image-gen workflow.
@@ -204,11 +206,11 @@ When generating a series of frames where each new frame must reference the previ
 ```bash
 mkdir -p output/dir && \
   codex exec [opts] -i char_sheet.png \
-    -- "frame1 prompt → save to output/dir/frame1.png" > /tmp/log1 2>&1 && \
+    -- "frame1 prompt → save to output/dir/frame1.png" < /dev/null > /tmp/log1 2>&1 && \
   codex exec [opts] -i char_sheet.png -i output/dir/frame1.png \
-    -- "frame2 prompt → save to output/dir/frame2.png" > /tmp/log2 2>&1 && \
+    -- "frame2 prompt → save to output/dir/frame2.png" < /dev/null > /tmp/log2 2>&1 && \
   codex exec [opts] -i char_sheet.png -i output/dir/frame1.png -i output/dir/frame2.png \
-    -- "frame3 prompt → save to output/dir/frame3.png" > /tmp/log3 2>&1
+    -- "frame3 prompt → save to output/dir/frame3.png" < /dev/null > /tmp/log3 2>&1
 ```
 
 This guarantees temporal/visual continuity: frame N has frame N-1 (and earlier) loaded as visual references. Each frame's prompt explicitly tells codex which attached image is the "character bible" vs the "previous frame" so the model knows what to match.
@@ -266,7 +268,7 @@ codex exec --skip-git-repo-check --ephemeral -s danger-full-access \
   -c model_reasoning_effort=high \
   --ignore-rules \
   --color never \
-  "<PROMPT>" 2>/dev/null
+  "<PROMPT>" < /dev/null 2>/dev/null
 ```
 
 Flag breakdown:
@@ -303,10 +305,10 @@ For multiple assets, fire each as a separate `codex exec` Bash call with `run_in
 
 ```
 Single message with 4 Bash tool calls, all run_in_background: true:
-  codex exec [...flags...] "PROMPT_BG"        > /tmp/codex-bg.log 2>&1
-  codex exec [...flags...] "PROMPT_PORTRAITS" > /tmp/codex-portraits.log 2>&1
-  codex exec [...flags...] "PROMPT_SIGIL"     > /tmp/codex-sigil.log 2>&1
-  codex exec [...flags...] "PROMPT_BANNER"    > /tmp/codex-banner.log 2>&1
+  codex exec [...flags...] "PROMPT_BG"        < /dev/null > /tmp/codex-bg.log 2>&1
+  codex exec [...flags...] "PROMPT_PORTRAITS" < /dev/null > /tmp/codex-portraits.log 2>&1
+  codex exec [...flags...] "PROMPT_SIGIL"     < /dev/null > /tmp/codex-sigil.log 2>&1
+  codex exec [...flags...] "PROMPT_BANNER"    < /dev/null > /tmp/codex-banner.log 2>&1
 ```
 
 After each completes, inspect the log to confirm the image-gen tool was invoked (look for `ig_<hash>.png` in the log — that's the cache path indicator) and confirm the target file exists.
@@ -504,7 +506,7 @@ Background: <BG_INSTRUCTION>.
 Constraints: no text, no watermark, no logos.
 
 Use the image generation tool. Save the PNG to the path above." \
-  > /tmp/codex-asset.log 2>&1
+  < /dev/null > /tmp/codex-asset.log 2>&1
 ```
 
 (Note: the `$imagegen` marker is escaped as `\$imagegen` inside the bash double-quoted string so the shell doesn't try to expand it as a variable.)
@@ -513,10 +515,10 @@ Use the image generation tool. Save the PNG to the path above." \
 
 ```bash
 # Fire N jobs in parallel — one prompt per call
-codex exec [...flags...] "PROMPT_BG"        > /tmp/codex-bg.log 2>&1 &
-codex exec [...flags...] "PROMPT_PORTRAITS" > /tmp/codex-portraits.log 2>&1 &
-codex exec [...flags...] "PROMPT_SIGIL"     > /tmp/codex-sigil.log 2>&1 &
-codex exec [...flags...] "PROMPT_BANNER"    > /tmp/codex-banner.log 2>&1 &
+codex exec [...flags...] "PROMPT_BG"        < /dev/null > /tmp/codex-bg.log 2>&1 &
+codex exec [...flags...] "PROMPT_PORTRAITS" < /dev/null > /tmp/codex-portraits.log 2>&1 &
+codex exec [...flags...] "PROMPT_SIGIL"     < /dev/null > /tmp/codex-sigil.log 2>&1 &
+codex exec [...flags...] "PROMPT_BANNER"    < /dev/null > /tmp/codex-banner.log 2>&1 &
 wait
 
 # If any didn't land in target path, recover from cache:
@@ -594,7 +596,7 @@ caffeinate -i "$CODEX" exec --skip-git-repo-check -s workspace-write \
   -m gpt-5.6-sol \
   -c model_reasoning_effort=medium \
   --color never \
-  "<SELF-CONTAINED LANE BRIEF>" > /tmp/lane-A.log 2>&1
+  "<SELF-CONTAINED LANE BRIEF>" < /dev/null > /tmp/lane-A.log 2>&1
 ```
 
 Swap `model_reasoning_effort=medium` for `=high` when this lane is stamped
@@ -602,6 +604,7 @@ hard/precision (model stays `gpt-5.6-sol`; astra only on explicit user request).
 `$CODEX` is the resolved binary (see *Locating the binary*); plain `codex` works
 when it is on PATH. This exact shape ran a real write lane on CLI 0.158
 (2026-09-27): approval `on-request`, sandbox `workspace-write`, files edited.
+Drop the `< /dev/null` and the lane hangs on stdin (see the note in Part 1).
 
 **Lane cost.** Budget a medium write lane at ~150K tokens, not the older
 50–80K estimate: a real `sol` `medium` write lane (one-repo deck fix,
@@ -619,7 +622,7 @@ Fire it with `run_in_background: true`. The brief is the lane's **entire contrac
 - **Real ceiling ≈ 20 concurrent `codex exec` processes** — that's RAM + OpenAI rate limits, not orchestration. Beyond that, tier and queue.
 - **Tier the lanes** (model AND effort are stamped per lane by the caller, see `fleet-orchestration`): quick read/explore lanes → `sol` `low`/`medium` read-only; routine write lanes → `sol` `medium` `-s workspace-write`; hard/precision write lanes → `sol` `high` `-s workspace-write`; a single explicitly heavy lane (deep refactor / gnarly debugging) → `sol` `xhigh`; security audit / triage lanes → `gpt-daybreak-blue-latest` `high`/`medium` read-only; review gates → the main loop, or one `sol` `xhigh` read-only lane. `astra` never unless the user explicitly asks.
 - **Read lanes stay read-only**: give review/analysis lanes `--sandbox read-only` so they physically cannot edit. Escalate to a write lane if edits are needed — don't tell a read lane to patch.
-- **Liveness check from the surface side**: a codex lane whose log file hasn't grown for many minutes with zero tool calls is dead regardless of the process table. Respawn it with the same brief.
+- **Liveness check from the surface side**: a codex lane whose log file hasn't grown for many minutes with zero tool calls is dead regardless of the process table. Respawn it with the same brief. If the log is only `Reading additional input from stdin...`, the lane never started: stdin was left open — kill it and respawn with `< /dev/null`.
 - **Completions are claims, not evidence.** "Succeeded" from a lane means it *thinks* it's done. Run the lane's acceptance check yourself (targeted typecheck / lint / tests in its dir) before integrating.
 
 ### Concurrent WRITE lanes — worktree isolation (the key trick)
