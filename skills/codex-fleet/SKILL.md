@@ -26,7 +26,13 @@ If the user's request is "use codex to X" or "run codex on X", run `codex exec .
 
 ## Prerequisites
 
-- Codex CLI installed and authenticated (`codex --version`). Reasoning tiers `low`/`medium`/`high`/`xhigh` need 0.128+; `max` and `ultra` need `gpt-6-astra` and a current CLI (0.144+ is known good). With astra user-only, `xhigh` is the practical ceiling for routed lanes.
+- Codex CLI installed and authenticated (`codex --version`; see *Locating the binary* below if `codex` is not on PATH). Reasoning tiers `low`/`medium`/`high`/`xhigh` need 0.128+; `max` and `ultra` need `gpt-6-astra` and a current CLI (0.144+ is known good). With astra user-only, `xhigh` is the practical ceiling for routed lanes.
+- **Locating the binary.** `codex` may not be on PATH: the ChatGPT desktop app on macOS bundles its own CLI at `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` (seen as `codex-cli 0.158.0-alpha.2.1`, 2026-09-27) and does not link it anywhere. Resolve once per session and use `"$CODEX"` wherever this file says `codex`:
+  ```bash
+  CODEX=$(command -v codex || echo /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex)
+  "$CODEX" --version
+  ```
+  If neither exists, stop and report; don't install anything without asking. A permanent fix is a symlink from a directory already on PATH (e.g. `ln -s <bundled path> ~/.local/bin/codex`), but that changes the user's environment, so propose it rather than doing it.
 - For the image-gen **CLI fallback** and `gpt-image-1.5` transparency path only: `OPENAI_API_KEY`. The built-in `image_gen` tool uses your Codex subscription and needs no key.
 
 ## Defaults (routing lives upstream — see `fleet-orchestration`)
@@ -104,10 +110,13 @@ codex exec --skip-git-repo-check \
 | Use case | Flags |
 |---|---|
 | Read-only review / analysis / diagnosis (default) | `--sandbox read-only` |
-| Apply local edits | `--sandbox workspace-write --full-auto` |
-| Network access or broad system access | `--sandbox danger-full-access --full-auto` (confirm with user first) |
+| Apply local edits | `-s workspace-write` |
+| Network access or broad system access | `-s danger-full-access` (confirm with user first) |
 
 For a working dir other than CWD: add `-C <DIR>`.
+
+> **`--full-auto` is gone.** On current CLIs (0.158 confirmed, 2026-09-27) `codex exec --full-auto` fails with `unexpected argument '--full-auto' found`. `-s workspace-write` alone is enough for an edit lane: a real lane ran with approval `on-request` and sandbox `workspace-write` and edited its files. `--approve-for-me` (route approval requests through automatic review in workspace-write) is **mutually exclusive with `-s`/`--sandbox`** — the CLI rejects the combination — so pick one; this skill uses `-s`.
+
 For escalated reasoning: replace `model_reasoning_effort=high` with `=xhigh` (a single explicitly heavy lane only).
 
 ### Background-first invocation pattern
@@ -159,7 +168,7 @@ Codex runs on OpenAI's models with their own training cutoffs. Treat it as a pee
 ### Error handling
 
 - If `codex --version` or `codex exec` exits non-zero, stop and report. Do not retry blindly.
-- High-impact flags (`--full-auto`, `--sandbox danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`) require explicit user OK before first use in a session — after that you can keep using them within the same task scope.
+- High-impact flags (`--approve-for-me`, `--sandbox danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`) require explicit user OK before first use in a session — after that you can keep using them within the same task scope.
 
 ---
 
@@ -569,7 +578,7 @@ A **fleet** is N `codex exec` delegates working at once. Each lane is a plain ba
 |---|---|---|
 | Model | `gpt-5.6-sol` for every lane, hard/precision included (`-m <model>`) | Routing is the calling agent's decision (see `fleet-orchestration`). `astra` (added 2026-09-05) is never auto-routed: it burns Codex quota far faster than `sol` (on a $20 ChatGPT Plus plan astra drains the quota fast); use it only when the user explicitly asks. Defensive security lanes → `gpt-daybreak-blue-latest`. `gpt-6-terra` does not exist under ChatGPT-account auth — confirmed 2026-09-16, never route here. |
 | Reasoning | `medium` for routine lanes, `high` for hard/precision lanes (`-c model_reasoning_effort=...`) | `xhigh` only for a single explicitly heavy lane (gnarly refactor, deep debugging); `low` for cheap read lanes. Gate review goes to the main loop (or one `sol` `xhigh` lane). |
-| Sandbox | `--full-auto` for write lanes; `--sandbox read-only` for read/review lanes | Write lanes need to edit their claimed files. Only grant what the lane needs. |
+| Sandbox | `-s workspace-write` for write lanes; `-s read-only` for read/review lanes (never `--full-auto`, removed; never `-s` together with `--approve-for-me`) | Write lanes need to edit their claimed files. Only grant what the lane needs. |
 | Working dir | `-C <lane dir>` | Anchor each lane in its claimed directory or worktree. |
 
 Before spawning more than one lane, state in one sentence how many lanes and
@@ -580,15 +589,25 @@ Codex quota."
 ### Spawn recipe (one lane)
 
 ```bash
-caffeinate -i codex exec --skip-git-repo-check --full-auto \
+caffeinate -i "$CODEX" exec --skip-git-repo-check -s workspace-write \
   -C <LANE_DIR> \
   -m gpt-5.6-sol \
   -c model_reasoning_effort=medium \
+  --color never \
   "<SELF-CONTAINED LANE BRIEF>" > /tmp/lane-A.log 2>&1
 ```
 
 Swap `model_reasoning_effort=medium` for `=high` when this lane is stamped
 hard/precision (model stays `gpt-5.6-sol`; astra only on explicit user request).
+`$CODEX` is the resolved binary (see *Locating the binary*); plain `codex` works
+when it is on PATH. This exact shape ran a real write lane on CLI 0.158
+(2026-09-27): approval `on-request`, sandbox `workspace-write`, files edited.
+
+**Lane cost.** Budget a medium write lane at ~150K tokens, not the older
+50–80K estimate: a real `sol` `medium` write lane (one-repo deck fix,
+2026-09-27) used ~142K. Read lanes and tiny edits are cheaper; long briefs,
+big files and repeated test runs push it up. Use this figure in the one-line
+fleet disclosure (lanes × ~150K) and keep minute-sized jobs in the main loop.
 
 Fire it with `run_in_background: true`. The brief is the lane's **entire contract** — it must state the goal, the exact files the lane OWNS, the files it must NOT touch (and which sibling owns them), the acceptance check, and how to report done/failed. A delegate can't see your conversation; everything it needs goes in the brief.
 
@@ -598,7 +617,7 @@ Fire it with `run_in_background: true`. The brief is the lane's **entire contrac
 
 - **Stagger the spawns** (2–5s apart): firing every lane's first model call simultaneously is a thundering herd. In a live 23-lane run, 2 lanes wedged on dead connections at startup and sat silent for 30 minutes. The stagger costs a minute; a zombie costs half an hour.
 - **Real ceiling ≈ 20 concurrent `codex exec` processes** — that's RAM + OpenAI rate limits, not orchestration. Beyond that, tier and queue.
-- **Tier the lanes** (model AND effort are stamped per lane by the caller, see `fleet-orchestration`): quick read/explore lanes → `sol` `low`/`medium` read-only; routine write lanes → `sol` `medium` full-auto; hard/precision write lanes → `sol` `high` full-auto; a single explicitly heavy lane (deep refactor / gnarly debugging) → `sol` `xhigh`; security audit / triage lanes → `gpt-daybreak-blue-latest` `high`/`medium` read-only; review gates → the main loop, or one `sol` `xhigh` read-only lane. `astra` never unless the user explicitly asks.
+- **Tier the lanes** (model AND effort are stamped per lane by the caller, see `fleet-orchestration`): quick read/explore lanes → `sol` `low`/`medium` read-only; routine write lanes → `sol` `medium` `-s workspace-write`; hard/precision write lanes → `sol` `high` `-s workspace-write`; a single explicitly heavy lane (deep refactor / gnarly debugging) → `sol` `xhigh`; security audit / triage lanes → `gpt-daybreak-blue-latest` `high`/`medium` read-only; review gates → the main loop, or one `sol` `xhigh` read-only lane. `astra` never unless the user explicitly asks.
 - **Read lanes stay read-only**: give review/analysis lanes `--sandbox read-only` so they physically cannot edit. Escalate to a write lane if edits are needed — don't tell a read lane to patch.
 - **Liveness check from the surface side**: a codex lane whose log file hasn't grown for many minutes with zero tool calls is dead regardless of the process table. Respawn it with the same brief.
 - **Completions are claims, not evidence.** "Succeeded" from a lane means it *thinks* it's done. Run the lane's acceptance check yourself (targeted typecheck / lint / tests in its dir) before integrating.

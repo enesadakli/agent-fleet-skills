@@ -94,6 +94,10 @@ right.** The main loop's tokens buy judgment, not throughput.
   - Effort buys more thinking, not a higher ceiling. The single most
     contract-sensitive or security-critical seam stays in the main loop
     (security lanes feed it evidence; they don't replace its gate review).
+  - Lane cost: budget ~150K tokens for a medium write lane (a real `sol`
+    `medium` write lane used ~142K on 2026-09-27; the older 50–80K figure
+    undercounts). Put lanes × ~150K in the disclosure sentence, and keep
+    minute-sized jobs in the main loop.
   - Codex models are obsessive instruction followers: capable, but they
     *execute* rather than improvise. Lane quality is bounded by spec quality —
     invest main-loop tokens in the brief, not in doing the lane yourself.
