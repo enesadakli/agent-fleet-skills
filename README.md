@@ -23,8 +23,9 @@ What that means in practice:
 
 - **Claude sub-agents share the main loop's quota.** They always get an
   explicit, cheapest-capable model. They're never a free way to parallelize.
-- **Codex runs everything on `gpt-5.6-sol`** and expresses difficulty through
-  reasoning effort (`medium` → `high` → one `xhigh` lane). `gpt-6-astra` is
+- **Codex runs everything on `gpt-6.1-sol`** and expresses difficulty through
+  reasoning effort (`medium` → `high` → one `xhigh` lane), falling back to
+  `gpt-6-sol` and then `gpt-5.6-sol` if it isn't available. `gpt-6-astra` is
   powerful but drains a Plus plan fast, so it's **never auto-routed**. It only
   runs when you ask for it.
 - **Defensive security runs as read-only Codex lanes**: audits, vulnerability

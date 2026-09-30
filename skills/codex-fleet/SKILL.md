@@ -1,6 +1,6 @@
 ---
 name: codex-fleet
-description: Standalone Codex CLI runner + fleet orchestrator. Does THREE things and always EXECUTES them (never just describes): (1) general code tasks via `codex exec`, (2) high-quality image generation via Codex's built-in `gpt-image-2` tool, and (3) parallel multi-lane fleets — spawning many `codex exec` delegates at once with worktree isolation. Model/effort per lane are NOT this skill's call — the calling agent (see `fleet-orchestration`) stamps `{model, effort}` on each lane before dispatch; this skill just executes it. Default model: `gpt-5.6-sol` for ALL lanes, including hard/precision ones (`high`, `xhigh` when explicitly heavy) — `gpt-6-astra` ONLY when the user explicitly asks for it (ChatGPT Plus quota). `gpt-daybreak-blue-latest` (Daybreak Blue) for defensive security lanes only when the caller stamps it (account must have Daybreak access); on a model-unavailable error re-fire on `gpt-5.6-sol`. `gpt-6-terra` does not exist under ChatGPT-account auth, do not use it. `--skip-git-repo-check` always. For multiple independent jobs, fire them ALL in parallel — compute is not the constraint, throughput is — but state lane count and each lane's model/effort in one sentence before firing more than one. Triggers on: "use codex", "run codex", "codex exec", "imagegen", "generate image", "make image", "render this", "ask codex to ...", "have codex ...", "spawn a fleet", "parallel codex", any image-asset request (icons/sigils/banners/portraits/backgrounds/sprites/UI assets/mockups/photoreal/etc.), and any request to delegate code-level work to Codex.
+description: Standalone Codex CLI runner + fleet orchestrator. Does THREE things and always EXECUTES them (never just describes): (1) general code tasks via `codex exec`, (2) high-quality image generation via Codex's built-in `gpt-image-2` tool, and (3) parallel multi-lane fleets — spawning many `codex exec` delegates at once with worktree isolation. Model/effort per lane are NOT this skill's call — the calling agent (see `fleet-orchestration`) stamps `{model, effort}` on each lane before dispatch; this skill just executes it. Default model: `gpt-6.1-sol` for ALL lanes, including hard/precision ones (`high`, `xhigh` when explicitly heavy) — `gpt-6-astra` ONLY when the user explicitly asks for it (ChatGPT Plus quota). `gpt-daybreak-blue-latest` (Daybreak Blue) for defensive security lanes only when the caller stamps it (account must have Daybreak access); on a model-unavailable error re-fire on `gpt-6.1-sol`. If `gpt-6.1-sol` itself is unavailable, fall back to `gpt-6-sol`, then `gpt-5.6-sol`. `gpt-6-terra` does not exist under ChatGPT-account auth, do not use it. `--skip-git-repo-check` always. For multiple independent jobs, fire them ALL in parallel — compute is not the constraint, throughput is — but state lane count and each lane's model/effort in one sentence before firing more than one. Triggers on: "use codex", "run codex", "codex exec", "imagegen", "generate image", "make image", "render this", "ask codex to ...", "have codex ...", "spawn a fleet", "parallel codex", any image-asset request (icons/sigils/banners/portraits/backgrounds/sprites/UI assets/mockups/photoreal/etc.), and any request to delegate code-level work to Codex.
 ---
 
 # Codex Fleet — Standalone Action Runner
@@ -26,7 +26,7 @@ If the user's request is "use codex to X" or "run codex on X", run `codex exec .
 
 ## Prerequisites
 
-- Codex CLI installed and authenticated (`codex --version`; see *Locating the binary* below if `codex` is not on PATH). Reasoning tiers `low`/`medium`/`high`/`xhigh` need 0.128+; `max` and `ultra` need `gpt-6-astra` and a current CLI (0.144+ is known good). With astra user-only, `xhigh` is the practical ceiling for routed lanes.
+- Codex CLI installed and authenticated (`codex --version`; see *Locating the binary* below if `codex` is not on PATH). Reasoning tiers `low`/`medium`/`high`/`xhigh` need 0.128+; `max` and `ultra` need a current CLI (0.144+ is known good) and are offered on the sol models as well as astra (catalog of 2026-09-30). They stay opt-in: `xhigh` is the practical ceiling for routed lanes. `gpt-6.1-sol` (released 2026-09-29) runs on CLI 0.158 via `-m` even though that CLI's `codex debug models` catalog does not list it yet; smoke-tested at `low` on 2026-09-30.
 - **Locating the binary.** `codex` may not be on PATH: the ChatGPT desktop app on macOS bundles its own CLI at `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` (seen as `codex-cli 0.158.0-alpha.2.1`, 2026-09-27) and does not link it anywhere. Resolve once per session and use `"$CODEX"` wherever this file says `codex`:
   ```bash
   CODEX=$(command -v codex || echo /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex)
@@ -42,7 +42,7 @@ fixed default of this skill. When the caller hasn't stamped a lane spec:
 
 | Setting | Value | When to override |
 |---|---|---|
-| Model | `gpt-5.6-sol` for every lane | `gpt-6-astra` ONLY when the user explicitly asks for it (on a $20 ChatGPT Plus plan astra drains the quota fast). Hard/precision lanes stay on sol with higher effort, or stay in the main loop. `-m <model>` if the user specifies something else directly. History: gpt-5.5 → gpt-5.6-sol → gpt-6-astra (2026-09-05) added as the precision tier, not a replacement for sol. `gpt-daybreak-blue-latest` (Daybreak Blue, approval-gated defensive-cybersecurity access) for security lanes the caller stamps, only if the account has access — see below. `gpt-6-terra` does **not** exist under ChatGPT-account auth (confirmed 2026-09-16, `invalid_request_error`) — never route here. |
+| Model | `gpt-6.1-sol` for every lane | `gpt-6-astra` ONLY when the user explicitly asks for it (on a $20 ChatGPT Plus plan astra drains the quota fast). Hard/precision lanes stay on sol with higher effort, or stay in the main loop. `-m <model>` if the user specifies something else directly. History: gpt-5.5 → gpt-5.6-sol → gpt-6-astra (2026-09-05) added as the precision tier, not a replacement for sol → gpt-6.1-sol (2026-09-29) became the lane model: OpenAI reports near-astra agentic coding at one-fifth astra's token price, and on Plus it sits in the GPT-6 Sol usage group (15–150 per 5 h vs 10–100 for gpt-5.6-sol), so it is both stronger and lighter on quota than the old default. Fallback on a model-unavailable error: `gpt-6-sol`, then `gpt-5.6-sol`. `gpt-daybreak-blue-latest` (Daybreak Blue, approval-gated defensive-cybersecurity access) for security lanes the caller stamps, only if the account has access — see below. `gpt-6-terra` does **not** exist under ChatGPT-account auth (confirmed 2026-09-16, `invalid_request_error`) — never route here. (`gpt-5.6-terra` and the luna models do exist but are not routed: cheap bulk work goes to Gemini Flash.) |
 | Reasoning effort | `medium` for routine lanes, `high` for hard/precision lanes | `xhigh` ONLY for a single explicitly heavy lane ("use xhigh", "deep") — never as a fleet-wide reflex, it burns quota too; `low` for cheap read lanes; `ultra` is opt-in because it enables OpenAI's automatic task delegation |
 | Service tier | **standard — fast is OFF** | see the note below; opt in per-call only |
 | Sandbox | `read-only` | `workspace-write` for edits; `danger-full-access` for image gen or network (ask first) |
@@ -50,11 +50,11 @@ fixed default of this skill. When the caller hasn't stamped a lane spec:
 | Stderr | suppressed (`2>/dev/null`) | only show when debugging |
 | `--color never` | recommended | when you need to grep stdout cleanly |
 
-Reasoning levels available on both `gpt-5.6-sol` and `gpt-6-astra`: `low`,
+Reasoning levels available on both `gpt-6.1-sol` and `gpt-6-astra`: `low`,
 `medium`, `high`, `xhigh`, `max`, `ultra`. Both are frontier-tier-class models,
 so `medium`/`high` is enough for most lanes; reserve `xhigh` for a lane
-whose brief justifies it. (Line above says `max`/`ultra` need astra; treat
-`xhigh` as sol's ceiling.) Cache default is `medium`, so always pass the
+whose brief justifies it. `max`/`ultra` exist on sol too but are opt-in only;
+treat `xhigh` as the routed ceiling. Cache default is `medium`, so always pass the
 effort explicitly. **sol is the lane model** — all routed volume lands here,
 hard lanes included. astra runs only on an explicit user request (on a $20 ChatGPT Plus plan astra drains the quota fast).
 
@@ -68,20 +68,20 @@ hard lanes included. astra runs only on an explicit user request (on a $20 ChatG
 
 ```bash
 codex exec --skip-git-repo-check \
-  -m gpt-5.6-sol \
+  -m gpt-6.1-sol \
   -c model_reasoning_effort=medium \
   --sandbox read-only \
   "<PROMPT>" < /dev/null 2>/dev/null
 ```
 
-Swap `-c model_reasoning_effort=medium` for `=high` when the caller has stamped this lane as hard/precision (see `fleet-orchestration`). Model stays `gpt-5.6-sol`; `-m gpt-6-astra` only on explicit user request.
+Swap `-c model_reasoning_effort=medium` for `=high` when the caller has stamped this lane as hard/precision (see `fleet-orchestration`). Model stays `gpt-6.1-sol`; `-m gpt-6-astra` only on explicit user request.
 
 ### Defensive security lane (sol, or Daybreak Blue when available)
 
 When the caller stamps a lane as defensive security (security review, vuln
 triage, threat model, secret/credential sweep, dependency CVE impact, hardening
 plan, authorised CTF), keep the sandbox read-only. The default model is
-`gpt-5.6-sol`; the caller swaps in `gpt-daybreak-blue-latest` only when the
+`gpt-6.1-sol`; the caller swaps in `gpt-daybreak-blue-latest` only when the
 account has Daybreak access (approval-gated, needs two FIDO2 hardware keys,
 can be revoked):
 
@@ -95,7 +95,7 @@ codex exec --skip-git-repo-check \
 ```
 
 - If the Daybreak call fails with a model-unavailable / access error, re-fire
-  the identical brief with `-m gpt-5.6-sol` at the same effort. Don't drop the
+  the identical brief with `-m gpt-6.1-sol` at the same effort. Don't drop the
   lane and don't retry Daybreak in a loop.
 - Daybreak's cached default effort is `low` — always pass effort explicitly
   (`medium` triage, `high` audit, `xhigh` one deep audit; `max`/`ultra` only on
@@ -127,7 +127,7 @@ Run any non-trivial codex task in the background. Don't block the main thread:
 
 ```
 Bash tool call:
-  command: codex exec --skip-git-repo-check -m gpt-5.6-sol \
+  command: codex exec --skip-git-repo-check -m gpt-6.1-sol \
            -c model_reasoning_effort=medium \
            --sandbox read-only \
            "Review src/foo.ts for race conditions and report findings." < /dev/null 2>/dev/null
@@ -264,7 +264,7 @@ That last line about `cp/mv` is essential — without it, Codex over-interprets 
 
 ```bash
 codex exec --skip-git-repo-check --ephemeral -s danger-full-access \
-  -m gpt-5.6-sol \
+  -m gpt-6.1-sol \
   -c model_reasoning_effort=high \
   --ignore-rules \
   --color never \
@@ -273,7 +273,7 @@ codex exec --skip-git-repo-check --ephemeral -s danger-full-access \
 
 Flag breakdown:
 - `-s danger-full-access` — required to write files. Image-gen tool needs this sandbox level to copy the result to disk.
-- `-m gpt-5.6-sol` — agent model that decides to call `image_gen`; the render itself is `gpt-image-2` either way. Use `-m gpt-6-astra` only if the user explicitly asks (on a $20 ChatGPT Plus plan astra drains the quota fast).
+- `-m gpt-6.1-sol` — agent model that decides to call `image_gen`; the render itself is `gpt-image-2` either way. Use `-m gpt-6-astra` only if the user explicitly asks (on a $20 ChatGPT Plus plan astra drains the quota fast).
 - `-c model_reasoning_effort=high` — image-gen default: `high` only drives prompt-following for the `image_gen` call. Code/fleet lanes do NOT inherit this; they use the per-lane Reasoning row in Part 3 (`medium` routine, `high` hard/precision). `xhigh`/`max` only on explicit request.
 - `--ephemeral` — fresh session each call, no history pollution between image jobs.
 - `--ignore-rules` — skips repo-rule scanning (avoids policy hits on prompts).
@@ -487,7 +487,7 @@ python "$IMAGE_GEN" generate \
 
 ```bash
 codex exec --skip-git-repo-check --ephemeral -s danger-full-access \
-  -m gpt-5.6-sol \
+  -m gpt-6.1-sol \
   -c model_reasoning_effort=high \
   --ignore-rules \
   --color never \
@@ -578,7 +578,7 @@ A **fleet** is N `codex exec` delegates working at once. Each lane is a plain ba
 
 | Setting | Default | Why |
 |---|---|---|
-| Model | `gpt-5.6-sol` for every lane, hard/precision included (`-m <model>`) | Routing is the calling agent's decision (see `fleet-orchestration`). `astra` (added 2026-09-05) is never auto-routed: it burns Codex quota far faster than `sol` (on a $20 ChatGPT Plus plan astra drains the quota fast); use it only when the user explicitly asks. Defensive security lanes → `gpt-daybreak-blue-latest`. `gpt-6-terra` does not exist under ChatGPT-account auth — confirmed 2026-09-16, never route here. |
+| Model | `gpt-6.1-sol` for every lane, hard/precision included (`-m <model>`) | Routing is the calling agent's decision (see `fleet-orchestration`). `astra` (added 2026-09-05) is never auto-routed: it burns Codex quota far faster than `sol` (on a $20 ChatGPT Plus plan astra drains the quota fast); use it only when the user explicitly asks. Defensive security lanes → `gpt-daybreak-blue-latest`. Model-unavailable fallback: `gpt-6-sol`, then `gpt-5.6-sol`. `gpt-6-terra` does not exist under ChatGPT-account auth — confirmed 2026-09-16, never route here. |
 | Reasoning | `medium` for routine lanes, `high` for hard/precision lanes (`-c model_reasoning_effort=...`) | `xhigh` only for a single explicitly heavy lane (gnarly refactor, deep debugging); `low` for cheap read lanes. Gate review goes to the main loop (or one `sol` `xhigh` lane). |
 | Sandbox | `-s workspace-write` for write lanes; `-s read-only` for read/review lanes (never `--full-auto`, removed; never `-s` together with `--approve-for-me`) | Write lanes need to edit their claimed files. Only grant what the lane needs. |
 | Working dir | `-C <lane dir>` | Anchor each lane in its claimed directory or worktree. |
@@ -593,14 +593,14 @@ Codex quota."
 ```bash
 caffeinate -i "$CODEX" exec --skip-git-repo-check -s workspace-write \
   -C <LANE_DIR> \
-  -m gpt-5.6-sol \
+  -m gpt-6.1-sol \
   -c model_reasoning_effort=medium \
   --color never \
   "<SELF-CONTAINED LANE BRIEF>" < /dev/null > /tmp/lane-A.log 2>&1
 ```
 
 Swap `model_reasoning_effort=medium` for `=high` when this lane is stamped
-hard/precision (model stays `gpt-5.6-sol`; astra only on explicit user request).
+hard/precision (model stays `gpt-6.1-sol`; astra only on explicit user request).
 `$CODEX` is the resolved binary (see *Locating the binary*); plain `codex` works
 when it is on PATH. This exact shape ran a real write lane on CLI 0.158
 (2026-09-27): approval `on-request`, sandbox `workspace-write`, files edited.

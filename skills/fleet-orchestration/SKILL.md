@@ -1,6 +1,6 @@
 ---
 name: fleet-orchestration
-description: "Delegation policy for a price/performance agent stack built on three separate ~$20/month plans — Claude (main loop + sub-agents), ChatGPT Plus (Codex lanes), and a Google account (Gemini Flash via Antigravity `agy`). The main loop owns architecture, judgment, AND per-lane routing (model + effort); delegates execute exactly what it stamps. Codex: gpt-5.6-sol for every routed lane with effort scaled by difficulty, gpt-6-astra only on explicit user request, defensive security lanes on sol `high` read-only, upgraded to gpt-daybreak-blue-latest only when the account has Daybreak access. Gemini Flash: generous, high-volume grunt tier. Claude sub-agents share the main loop's quota, so they get an explicit, cheapest-capable model. Load whenever spawning sub-agents, Codex or Gemini lanes, or planning any delegation."
+description: "Delegation policy for a price/performance agent stack built on three separate ~$20/month plans — Claude (main loop + sub-agents), ChatGPT Plus (Codex lanes), and a Google account (Gemini Flash via Antigravity `agy`). The main loop owns architecture, judgment, AND per-lane routing (model + effort); delegates execute exactly what it stamps. Codex: gpt-6.1-sol for every routed lane with effort scaled by difficulty, gpt-6-astra only on explicit user request, defensive security lanes on sol `high` read-only, upgraded to gpt-daybreak-blue-latest only when the account has Daybreak access. Gemini Flash: generous, high-volume grunt tier. Claude sub-agents share the main loop's quota, so they get an explicit, cheapest-capable model. Load whenever spawning sub-agents, Codex or Gemini lanes, or planning any delegation."
 ---
 
 # Orchestration & delegation policy ($20-plan stack)
@@ -51,13 +51,18 @@ right.** The main loop's tokens buy judgment, not throughput.
   leaves your machine.
 - **Codex (`codex-fleet`) — `sol` for every routed lane; effort carries the
   difficulty.**
-  - `gpt-5.6-sol` `medium` — routine execution against a complete spec:
+  - `gpt-6.1-sol` `medium` — routine execution against a complete spec:
     refactors along an existing pattern, tests against a defined contract,
     read-heavy investigation.
-  - `gpt-5.6-sol` `high` — hard or precision lanes with a complete spec.
-  - `gpt-5.6-sol` `xhigh` — a single, explicitly heavy lane. Never a
-    fleet-wide reflex; heavy effort burns Plus quota too. (`max`/`ultra` need
-    astra.)
+  - `gpt-6.1-sol` `high` — hard or precision lanes with a complete spec.
+  - `gpt-6.1-sol` `xhigh` — a single, explicitly heavy lane. Never a
+    fleet-wide reflex; heavy effort burns Plus quota too. (`max`/`ultra`
+    exist on sol but are opt-in only.)
+  - `gpt-6.1-sol` (2026-09-29) replaced `gpt-5.6-sol` as the lane model:
+    near-astra agentic coding per OpenAI, and on Plus it draws from the
+    GPT-6 Sol usage group, which stretches further than 5.6-sol's. If it is
+    unavailable, fall back to `gpt-6-sol`, then `gpt-5.6-sol`. Luna models are
+    not routed; cheap bulk work belongs to Gemini Flash.
   - **`gpt-6-astra` is never auto-routed.** It is frontier-tier but drains a
     Plus plan fast. Use it only when the user explicitly asks.
   - **Defensive security lane — `sol` by default, Daybreak Blue when
@@ -67,7 +72,7 @@ right.** The main loop's tokens buy judgment, not throughput.
     threat modelling, secret and credential-leak sweeps, dependency/CVE impact
     analysis, auth / sandbox / permission boundary review, hardening plans,
     security-focused incident or log analysis, authorised CTF work.
-    - Model: `gpt-5.6-sol`. Upgrade to `gpt-daybreak-blue-latest` (Daybreak
+    - Model: `gpt-6.1-sol`. Upgrade to `gpt-daybreak-blue-latest` (Daybreak
       Blue, OpenAI's approval-gated Trusted Access for Cyber tier: same
       frontier model with cyber safeguards relaxed) only when the account is
       known to have Daybreak access. Access requires approval, an eligible
