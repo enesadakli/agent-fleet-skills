@@ -34,6 +34,10 @@ What that means in practice:
   to Daybreak Blue (`gpt-daybreak-blue-latest`), with automatic fallback to
   `sol` if the model isn't available. Every finding is verified in the main
   loop before a fix.
+- **When Codex runs out, Claude Sonnet 5.5 through `agy` takes over** spec'd
+  execution lanes. Antigravity bills Claude models from a quota group separate
+  from Gemini Flash and outside the Claude plan. The group is small, so it is a
+  fallback, not a default.
 - **Gemini Flash is the bulk pool.** "Check these 50 files", "label these 200
   lines", "same mechanical edit everywhere" go here, with structured output so
   the results can be counted and spot-checked.
@@ -65,7 +69,7 @@ Every executor skill follows the same rules:
 - `zip` and `rsync` for `gptpro`
 - macOS or Linux. Fleet lanes use `caffeinate -i` on macOS to survive sleep.
 
-Model IDs and CLI flags were verified live in **September 2026**. Providers
+Model IDs and CLI flags were verified live in **October 2026**. Providers
 rename and retire models often, so check `agy models` and your Codex model list
 if something stops resolving.
 
@@ -104,7 +108,8 @@ Spec'i yazılmış işler Codex `sol` ile yapılıyor, zorluğa göre effort art
 `astra` yalnızca açıkça istenirse kullanılıyor. Savunma amaçlı güvenlik işleri
 (denetim, zafiyet triyajı, tehdit modeli, secret/CVE taraması) salt okunur Codex
 `sol` lane'lerinde yapılıyor; hesapta Daybreak erişimi varsa Daybreak Blue'ya
-yükseltilebiliyor, model yoksa `sol`'a geri düşüyor. Bulgular ana oturumda doğrulanıyor. Toplu ve tekdüze işler Gemini
+yükseltilebiliyor, model yoksa `sol`'a geri düşüyor. Bulgular ana oturumda doğrulanıyor. Codex kotası
+bitince spec'li işler `agy` üzerinden Claude Sonnet 5.5'e geçiyor; bu ayrı ve küçük bir kota. Toplu ve tekdüze işler Gemini
 Flash'a cömertçe veriliyor. Amaç fiyat/performans: her iş, onu doğru yapabilen
 en ucuz kotaya gidiyor.
 

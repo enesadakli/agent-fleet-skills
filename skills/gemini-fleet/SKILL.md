@@ -100,9 +100,12 @@ Binding rules:
 - **Never `gemini-3.1-pro-*` from this skill.** If a job needs Pro-class
   reasoning it is not a grunt job — it belongs to Codex or the main loop.
   Routing it here spends Antigravity quota on work another tier does better.
-- **Never `claude-*` or `gpt-oss-*` through `agy`.** They appear in
-  `agy models` but routing Claude work through a third-party CLI is pointless
-  indirection — use the native harness.
+- **`claude-*` only when the caller stamps it as the Codex fallback.** The
+  Claude/GPT models bill a quota group separate from Gemini Flash and outside
+  the Claude plan, which makes `claude-sonnet-5-5-*` the executor of choice
+  when Codex is out of quota (see `fleet-orchestration`). Never a default,
+  never for grunt work, and `claude-opus-5-5-*` only on explicit request: the
+  group is small. `gpt-oss-*` is not routed.
 - **Verification calls are one call, cheapest model, shortest prompt.** Never
   "test the fleet" with a parallel run.
 - **Batch where it's natural, fan out when it helps.** A 50-item list in one lane
@@ -120,12 +123,13 @@ Binding rules:
   ```bash
   command -v agy && agy --version
   ```
-  Verified locally 2026-09-16: `agy` at `~/.local/bin/agy`, version `1.2.4`.
+  Verified locally 2026-09-16: `agy` at `~/.local/bin/agy`, version `1.2.4`;
+  `1.3.2` on 2026-10-09.
 - Auth check with **zero generation cost**: `agy models` hits the account and
   prints the entitled model list. If login is broken this fails — it is the
   correct cheap liveness probe, not a `-p` call.
 
-## Models (verified live 2026-09-16 via `agy models`)
+## Models (verified live 2026-10-09 via `agy models`, agy 1.3.2)
 
 Reasoning effort is **baked into the model id** as a `-low` / `-medium` /
 `-high` suffix. There is also a separate `--effort low|medium|high` flag.
@@ -144,7 +148,15 @@ id — it's not a fallback, it's a guaranteed error.**
 | `gemini-3.8-flash-high` | Upper bound for this skill. Fine when a lane clearly benefits. |
 | `gemini-3.7-flash-*`, `gemini-3.6-flash-*` | Older Flash generations; use only if a caller pins them or 3.8 misbehaves. |
 | `gemini-3.1-pro-high` / `-low` | **Out of scope — do not route here.** See quota rules. |
-| `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium` | Visible in the list; **not this skill's business.** |
+| `claude-sonnet-5-5-low` / `-medium` / `-high` | **Codex fallback only, when the caller stamps it.** Separate Claude/GPT quota group. `-high` for write lanes. |
+| `claude-opus-5-5-low` / `-medium` / `-high` | Explicit request only. ~21.5K input overhead per call, roughly 45–50 short calls per weekly window. |
+| `gpt-oss-120b-medium` | Visible in the list; not routed. |
+
+Quota (`agy -p "/usage" --output-format json`, measured 2026-10-09): two
+groups, **Gemini Models** and **Claude and GPT models**, each with a 5-hour and
+a weekly window that opens on first use. Burning one group does not touch the
+other. Consumption follows token cost, output weighs roughly 5× input, and
+cache reads are cheap.
 
 ## What a lane actually has: the verified tool inventory
 
@@ -462,7 +474,10 @@ touch clearly disjoint files):
   user, and do not respawn. This is the one failure that must never be handled
   by "try again."
 - `--dangerously-skip-permissions` requires explicit user OK before its first use
-  in a session; after that it's fine within the same task scope.
+  in a session; after that it's fine within the same task scope. Claude
+  Code's auto-permission check may still refuse to launch it from the main
+  loop (seen 2026-10-09); then hand the exact command to the operator to run
+  with the `!` prefix and read the result from the log.
 - If login has lapsed, `agy models` fails — tell the user to re-run the
   interactive `agy` login. Do **not** work around it by setting an API key;
   this skill is built for account login, not API keys.
