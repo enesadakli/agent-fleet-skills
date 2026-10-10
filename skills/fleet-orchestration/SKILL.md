@@ -52,6 +52,20 @@ right.** The main loop's tokens buy judgment, not throughput.
   the input, spot-check a sample. Batch tiny items (per-call overhead is
   ~13K tokens), fan out when it buys speed. **No personal data** — lane content
   leaves your machine.
+  - Flash also takes **write lanes when the work is fully specified and needs
+    no decisions**: every behaviour, path and message format is in the brief,
+    and an acceptance test the main loop runs decides pass/fail. Use
+    `gemini-3.8-flash-high` for these. Measured 2026-10-10 (chen-er, two lint
+    rules + tests, hidden acceptance tests): Flash and agy Sonnet both passed
+    9/9 and stayed in scope; Flash took 511 s vs 91 s and wrote rougher,
+    duplicated code, but used ~12x less weekly quota.
+- **Ambiguous or style-critical work is never delegated to Flash or Sonnet.**
+  If the task leaves decisions open, or matching the codebase's style is part
+  of the deliverable, it goes to a Claude **Opus** sub-agent. The main loop
+  stays the decision authority: it settles the open questions, writes the
+  brief, answers the sub-agent's escalations and reviews and gates the result;
+  it does not write the code itself. Codex `sol` is an option only after the
+  main loop has resolved every open decision into a complete spec.
 - **Codex (`codex-fleet`) — `sol` for every routed lane; effort carries the
   difficulty.**
   - `gpt-6.1-sol` `medium` — routine execution against a complete spec:
@@ -116,7 +130,8 @@ right.** The main loop's tokens buy judgment, not throughput.
   separate from Gemini Flash, and none of it touches the Claude plan. When
   Codex hits its usage limit mid-task, re-route spec'd execution lanes here
   instead of pulling them into the main loop: `claude-sonnet-5-5-high` for
-  write lanes, `-medium` for routine ones. Same lane-brief contract as a
+  write lanes, `-medium` for routine ones. Same bar as Codex: a complete,
+  decision-free spec. Ambiguous or style-critical work does not go here. Same lane-brief contract as a
   Codex lane; the main loop still verifies and gates the result.
   - The group is small: each Antigravity window is roughly 500K fresh input
     tokens per 5 hours and about two such windows per week (measured
@@ -143,7 +158,9 @@ right.** The main loop's tokens buy judgment, not throughput.
   question. Which model you get depends on your ChatGPT plan; the workflow
   works with the strongest thinking model your plan offers.
 
-Rule of thumb: **bulk mechanical → Gemini; spec'd execution → Codex sol
+Rule of thumb: **bulk mechanical, or fully spec'd decision-free writes with an
+acceptance test → Gemini; ambiguous or style-critical work → Opus sub-agent
+with the main loop deciding and gating, never Flash or Sonnet; spec'd execution → Codex sol
 (effort by difficulty), or agy Sonnet 5.5 when Codex is out of quota; defensive security analysis → Codex sol `high` read-only (Daybreak Blue if the account has it); loose exploration → cheapest capable Claude
 sub-agent; judgment / specs / synthesis / gate review → the main loop.**
 
@@ -152,6 +169,8 @@ sub-agent; judgment / specs / synthesis / gate review → the main loop.**
 | Work | Route | Pool |
 |---|---|---|
 | Uniform, shallow, high-volume | Gemini `flash-low` / `flash-medium` | Google |
+| Fully spec'd, decision-free write with acceptance test | Gemini `flash-high` | Google |
+| Ambiguous or style-critical | Claude Opus sub-agent; main loop decides, briefs and gates (Codex `sol` only after a full spec); never Flash or Sonnet | Claude |
 | Routine, spec'd, parallel | Codex `sol` `medium` | ChatGPT |
 | Hard / precision, spec'd | Codex `sol` `high` | ChatGPT |
 | One explicitly heavy lane | Codex `sol` `xhigh` | ChatGPT |
